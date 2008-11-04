@@ -45,6 +45,12 @@ module Timesheet
         puts "timesheet: Unknown command: #{command}"
         exit
       end
+    
+      # FIXME: some commands won't require a task to be specified 
+      unless ARGV[1]
+        puts "timesheet: must specify task"
+        exit
+      end
 
       dbfile = "#{ENV['HOME']}/timesheet"
       unless File.exist?(dbfile)
@@ -56,37 +62,37 @@ module Timesheet
         :dbfile => dbfile
       )
       
-      Timesheet.new.send(command.to_sym)
+      begin 
+        Timesheet.new.send(command.to_sym, ARGV[1])
+      rescue Exception => ex
+        $stderr.puts "timesheet: #{ex.message}"
+        exit(1)
+      end
     end
 
   end
 
   class Timesheet
 
-    def start
-      require_task
+    def start(name)
+      task = Task.find_or_create_by_name(name)
 
-      # FIXME: cannot start task if already started
-      task = Task.find_or_create_by_name(ARGV[1])
+      # cannot start task if already started
+      entry = Entry.find(:first, :conditions => {:task_id => task.id, :stopped_at => nil})
+      raise ArgumentError, "task #{task.name} already started." if entry 
+
       Entry.create(:task => task, :started_at => Time.now)
     end
 
-    def stop
-      require_task
+    def stop(name)
+      task = Task.find_by_name(name)
 
-      # FIXME: cannot stop task if not started
-      task = Task.find_by_name(ARGV[1])
+      raise ArgumentError, "timesheet: task #{name} does not exist" unless task
+
       entry = Entry.find(:first, :conditions => {:task_id => task.id, :stopped_at => nil})
+      raise ArgumentError, "timesheet: #{task.name} was not started" unless entry
+ 
       Entry.update(entry, :stopped_at => Time.now)
-    end
-
-  private
-
-    def require_task
-      unless ARGV[1]
-        puts "timesheet: must specify task"
-        exit
-      end
     end
   
   end
