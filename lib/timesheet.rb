@@ -71,30 +71,25 @@ module Timesheet
       raise ArgumentError, "must specify task" unless name
       task = Task.find_or_create_by_name(name)
 
-      stop0 { |a| raise ArgumentError, "task #{task.name} already started." if a && a.task == task } 
+      active = Entry.active
+      raise ArgumentError, "task #{task.name} already started." if active && active.task == task 
+      puts "stopping task #{active.task.name}"
+      active.stop!
 
       puts "starting task #{task.name}"
       Entry.create(:task => task, :started_at => Time.now)
     end
 
     def stop
-      stop0 { |a| raise ArgumentError, "timesheet: no task has been started" unless a }
+      active = Entry.active
+      raise ArgumentError, "timesheet: no task has been started" unless active
+      puts "stopping task #{active.task.name}"
+      active.stop!
     end
 
     def tasks
       Task.find(:all, :order => 'name').each do |t|
         puts t.name
-      end
-    end
-
-  private
-
-    def stop0(&block)
-      active = Entry.active
-      yield active
-      if active
-        puts "stopping task #{active.task.name}"
-        active.stop!
       end
     end
 
