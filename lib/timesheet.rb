@@ -40,30 +40,23 @@ module Timesheet
     COMMANDS = ["start"]
 
     def run
-      command = ARGV[0]
-      unless Timesheet.public_instance_methods.include?(command)
-        puts "timesheet: Unknown command: #{command}"
-        exit
-      end
-    
-      # FIXME: some commands won't require a task to be specified 
-      unless ARGV[1]
-        puts "timesheet: must specify task"
-        exit
-      end
-
-      dbfile = "#{ENV['HOME']}/timesheet"
-      unless File.exist?(dbfile)
-        `sqlite3 #{dbfile} < schema.sql`
-      end
-
-      ActiveRecord::Base.establish_connection(
-        :adapter  => "sqlite3",
-        :dbfile => dbfile
-      )
-      
       begin 
-        Timesheet.new.send(command.to_sym, ARGV[1])
+        command = ARGV[0]
+        raise ArgumentError, "type 'timesheet help' for usage" unless command 
+        raise ArgumentError, "unknown command: #{command}" unless Timesheet.public_instance_methods.include?(command)
+
+        dbfile = "#{ENV['HOME']}/timesheet"
+        unless File.exist?(dbfile)
+          `sqlite3 #{dbfile} < schema.sql`
+        end
+
+        ActiveRecord::Base.establish_connection(
+          :adapter  => "sqlite3",
+          :dbfile => dbfile
+        )
+     
+        ARGV.shift 
+        Timesheet.new.send(command.to_sym, *ARGV)
       rescue Exception => ex
         $stderr.puts "timesheet: #{ex.message}"
         exit(1)
@@ -74,27 +67,37 @@ module Timesheet
 
   class Timesheet
 
-    def start(name)
+    def start(name = nil)
+      raise ArgumentError, "must specify task" unless name
       task = Task.find_or_create_by_name(name)
 
-      # cannot start task if already started
-      entry = Entry.find(:first, :conditions => {:task_id => task.id, :stopped_at => nil})
-      raise ArgumentError, "task #{task.name} already started." if entry 
+      stop0 { |a| raise ArgumentError, "task #{task.name} already started." if a && a.task == task } 
 
+      puts "starting task #{task.name}"
       Entry.create(:task => task, :started_at => Time.now)
     end
 
-    def stop(name)
-      task = Task.find_by_name(name)
-
-      raise ArgumentError, "timesheet: task #{name} does not exist" unless task
-
-      entry = Entry.find(:first, :conditions => {:task_id => task.id, :stopped_at => nil})
-      raise ArgumentError, "timesheet: #{task.name} was not started" unless entry
- 
-      Entry.update(entry, :stopped_at => Time.now)
+    def stop
+      stop0 { |a| raise ArgumentError, "timesheet: no task has been started" unless a }
     end
-  
+
+    def tasks
+      Task.find(:all, :order => 'name').each do |t|
+        puts t.name
+      end
+    end
+
+  private
+
+    def stop0(&block)
+      active = Entry.active
+      yield active
+      if active
+        puts "stopping task #{active.task.name}"
+        active.stop!
+      end
+    end
+
   end
 
   class Task < ActiveRecord::Base
@@ -103,6 +106,17 @@ module Timesheet
 
   class Entry < ActiveRecord::Base
     belongs_to :task
+
+    class << self
+      def active
+        Entry.find(:first, :conditions => {:stopped_at => nil})
+      end
+    end
+
+    def stop!
+      Entry.update(self, :stopped_at => Time.now)
+    end
+
   end
 
 end
