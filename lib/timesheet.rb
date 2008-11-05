@@ -22,7 +22,6 @@
 
 require 'rubygems'
 require 'activerecord'
-require 'optparse'
 require 'sqlite3'
 
 module Timesheet
@@ -36,8 +35,6 @@ module Timesheet
   end
     
   class Application
-
-    COMMANDS = ["start"]
 
     def run
       begin 
@@ -72,9 +69,10 @@ module Timesheet
       task = Task.find_or_create_by_name(name)
 
       active = Entry.active
-      raise ArgumentError, "task #{task.name} already started." if active && active.task == task 
-      puts "stopping task #{active.task.name}"
-      active.stop!
+      if active 
+        raise ArgumentError, "task #{task.name} already started." if active.task == task 
+        stop0(active)
+      end
 
       puts "starting task #{task.name}"
       Entry.create(:task => task, :started_at => Time.now)
@@ -82,15 +80,31 @@ module Timesheet
 
     def stop
       active = Entry.active
-      raise ArgumentError, "timesheet: no task has been started" unless active
-      puts "stopping task #{active.task.name}"
-      active.stop!
+      raise ArgumentError, "no task has been started" unless active
+      stop0(active)
     end
 
     def tasks
       Task.find(:all, :order => 'name').each do |t|
         puts t.name
       end
+    end
+
+    def status
+      active = Entry.active
+      if active
+        h, m, s, f = Date.day_fraction_to_time(active.duration)
+        puts "task: #{active.task.name} duration: #{h} hours, #{m} minutes, #{s} seconds"
+      else
+        puts "no task has been started"
+      end 
+    end
+
+  private
+
+    def stop0(entry)
+      puts "stopping task #{entry.task.name}"
+      entry.stop!
     end
 
   end
@@ -110,6 +124,10 @@ module Timesheet
 
     def stop!
       Entry.update(self, :stopped_at => Time.now)
+    end
+
+    def duration
+      duration = (stopped_at || Time.now.to_i) - started_at
     end
 
   end
