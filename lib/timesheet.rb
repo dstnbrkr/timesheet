@@ -24,6 +24,15 @@ require 'rubygems'
 require 'activerecord'
 require 'sqlite3'
 
+dbfile = "#{ENV['HOME']}/timesheet"
+unless File.exist?(dbfile)
+  `sqlite3 #{dbfile} < schema.sql`
+end
+ActiveRecord::Base.establish_connection(
+  :adapter  => "sqlite3",
+  :dbfile => dbfile
+)
+
 module Timesheet
   
   class << self
@@ -41,16 +50,6 @@ module Timesheet
         command = ARGV[0]
         raise ArgumentError, "type 'timesheet help' for usage" unless command 
         raise ArgumentError, "unknown command: #{command}" unless Timesheet.public_instance_methods.include?(command)
-
-        dbfile = "#{ENV['HOME']}/timesheet"
-        unless File.exist?(dbfile)
-          `sqlite3 #{dbfile} < schema.sql`
-        end
-
-        ActiveRecord::Base.establish_connection(
-          :adapter  => "sqlite3",
-          :dbfile => dbfile
-        )
      
         ARGV.shift 
         Timesheet.new.send(command.to_sym, *ARGV)
@@ -93,10 +92,25 @@ module Timesheet
     def status
       active = Entry.active
       if active
-        h, m, s, f = Date.day_fraction_to_time(active.duration)
+        h, m, s, f = active.duration
         puts "task: #{active.task.name} duration: #{h} hours, #{m} minutes, #{s} seconds"
       else
         puts "no task has been started"
+      end 
+    end
+
+    def log
+      w1 = Task.find(:all).collect { |t| t.name.length }.max
+      w2 = Entry.find(:all).collect { |e| h, m = e.duration; h.to_s.length }.max
+      
+      puts
+      totals_by_task_by_day.each do |day, tasks|
+        puts day
+        tasks.each do |task, duration|
+          h, m = Entry.duration_parts(duration)
+          printf "%-#{w1}s  %#{w2}i:%02i\n", task.name, h, m
+        end 
+        puts
       end 
     end
 
@@ -105,6 +119,21 @@ module Timesheet
     def stop0(entry)
       puts "stopping task #{entry.task.name}"
       entry.stop!
+    end
+
+    def timestamp_to_date(timestamp)
+      Date.parse(Time.at(timestamp).strftime('%Y/%m/%d'))
+    end
+
+    def totals_by_task_by_day
+      days = {}
+      Entry.find(:all).each do |e|
+        day = timestamp_to_date(e.started_at)
+        days[day] = {} unless days[day]
+        days[day][e.task] = 0 unless days[day][e.task]
+        days[day][e.task] += e.duration
+      end
+      days
     end
 
   end
@@ -120,6 +149,13 @@ module Timesheet
       def active
         Entry.find(:first, :conditions => {:stopped_at => nil})
       end
+
+      def duration_parts(duration)
+        d = duration
+        h, d = d.divmod(1.hour)
+        m, d = d.divmod(1.minute)
+        return h, m
+      end 
     end
 
     def stop!
@@ -127,7 +163,7 @@ module Timesheet
     end
 
     def duration
-      duration = (stopped_at || Time.now.to_i) - started_at
+      (stopped_at || Time.now.to_i) - started_at
     end
 
   end
