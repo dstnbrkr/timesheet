@@ -83,17 +83,11 @@ module Timesheet
       stop0(active)
     end
 
-    def tasks
-      Task.find(:all, :order => 'name').each do |t|
-        puts t.name
-      end
-    end
-
     def status
       active = Entry.active
       if active
-        h, m, s, f = active.duration
-        puts "task: #{active.task.name} duration: #{h} hours, #{m} minutes, #{s} seconds"
+        h, m = Entry.duration_parts(active.duration)
+        puts "task: #{active.task.name} duration: #{h} hours, #{m} minutes"
       else
         puts "no task has been started"
       end 
@@ -104,9 +98,10 @@ module Timesheet
       w2 = Entry.find(:all).collect { |e| h, m = e.duration; h.to_s.length }.max
       
       puts
-      totals_by_task_by_day.each do |day, tasks|
-        puts day
-        tasks.each do |task, duration|
+      days = totals_by_task_by_day
+      days.keys.sort.each do |day|
+        puts days[day]
+        days[day].each do |task, duration|
           h, m = Entry.duration_parts(duration)
           printf "%-#{w1}s  %#{w2}i:%02i\n", task.name, h, m
         end 

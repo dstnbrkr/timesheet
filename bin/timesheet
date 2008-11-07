@@ -23,6 +23,6 @@
 #
 
 begin
-  require 'lib/timesheet'
+  require 'timesheet'
 end
 Timesheet.application.run
