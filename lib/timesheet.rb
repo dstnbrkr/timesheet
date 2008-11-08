@@ -36,11 +36,9 @@ ActiveRecord::Base.establish_connection(
 module Timesheet
   
   class << self
-  
     def application
       @application ||= Application.new
     end
-
   end
     
   class Application
