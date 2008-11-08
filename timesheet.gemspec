@@ -14,6 +14,7 @@ spec = Gem::Specification.new do |s|
   #s.extra_rdoc_files = ["README"]
   s.add_dependency("activerecord", ">= 2.1.0") 
   s.add_dependency("sqlite3-ruby", ">= 1.2.1") 
+  s.add_dependency("mocha", ">= 0.5.6")
 end
 
 Rake::GemPackageTask.new(spec) do |pkg| 

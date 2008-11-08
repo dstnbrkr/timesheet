@@ -46,17 +46,25 @@ module Timesheet
   class Application
 
     def run
-      begin 
-        command = ARGV[0]
-        raise ArgumentError, "type 'timesheet help' for usage" unless command 
-        raise ArgumentError, "unknown command: #{command}" unless Timesheet.public_instance_methods.include?(command)
-     
-        ARGV.shift 
-        Timesheet.new.send(command.to_sym, *ARGV)
+      begin
+        command, args = get_command(ARGV)
+        validate_command(command) 
+        Timesheet.new.send(command, *args)
       rescue Exception => ex
         $stderr.puts "timesheet: #{ex.message}"
         exit(1)
       end
+    end
+
+    def get_command(args)
+      raise ArgumentError, "type 'timesheet help' for usage" unless args[0]
+      return args[0], args[1, args.size - 1]
+    end
+
+    def validate_command(command)
+      unless Timesheet.public_instance_methods.include?(command)
+        raise ArgumentError, "unknown command: #{command}"
+      end 
     end
 
   end
