@@ -72,13 +72,9 @@ module Timesheet
     def start(name = nil)
       raise ArgumentError, "must specify task" unless name
       task = Task.find_or_create_by_name(name)
-
-      active = Entry.active
-      if active 
-        raise ArgumentError, "task #{task.name} already started." if active.task == task 
-        stop0(active)
-      end
-
+      
+      prepare_to_switch_to_task task
+      
       puts "starting task #{task.name}"
       Entry.create(:task => task, :started_at => Time.now)
     end
@@ -116,6 +112,15 @@ module Timesheet
     end
 
   private
+
+    def prepare_to_switch_to_task(task)
+      active = Entry.active
+      return unless active
+      if active.task == task
+        raise ArgumentError, "task #{task.name} already started."
+      end
+      stop0(active)
+    end
 
     def stop0(entry)
       puts "stopping task #{entry.task.name}"
